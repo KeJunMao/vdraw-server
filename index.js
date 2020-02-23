@@ -17,6 +17,7 @@ class RoomInfo {
     this.time = 59;
     this.users = [];
     this.history = [];
+    this.initJSON = [];
     this.init();
   }
   addUser(user) {
@@ -71,6 +72,9 @@ class RoomInfo {
       delete allRoom[this.name];
     }
   }
+  clear() {
+    this.history = [];
+  }
 }
 class SysMsg {
   constructor(msg, code, data) {
@@ -81,7 +85,10 @@ class SysMsg {
     // 201 创建房间成功
     // 202 加入房间成功
     // 203 同步成功
-    // 204 离开成功
+    // 204 用户离开成功
+    // 205 我离开成功
+    // 206 更新房间
+    //
     // error
     // 400 通用客户端错误
     // 401 密码错误
@@ -94,19 +101,23 @@ class SysMsg {
 }
 
 io.on("connection", socket => {
-  socket.on("join", ({ name, password, user }) => {
+  let curUser = {};
+  let curRoom = null;
+  socket.on("join", ({ name, password, user, data }) => {
     let isCreate = false,
       error;
     if (!allRoom[name]) {
       isCreate = true;
       allRoom[name] = new RoomInfo(name, password);
-      [user, error] = allRoom[name].addUser(user);
+      allRoom[name].initJSON = data.json;
+      [curUser, error] = allRoom[name].addUser(user);
       if (error) {
         io.to(socket.id).emit("sys", new SysMsg("加入房间失败！", 500));
         return;
       }
     }
-    if (allRoom[name].password !== password) {
+    curRoom = allRoom[name];
+    if (curRoom && curRoom.password !== password) {
       io.to(socket.id).emit("sys", new SysMsg("密码错误！", 401));
       return;
     }
@@ -114,46 +125,55 @@ io.on("connection", socket => {
     let msg = "";
     let code = 200;
     if (isCreate) {
-      msg = user.name + "创建房间！";
+      msg = curUser.name + "创建房间！";
       code = 201;
     } else {
-      [user, error] = allRoom[name].addUser(user);
+      [curUser, error] = curRoom.addUser(user);
       if (error) {
         io.to(socket.id).emit("sys", new SysMsg("你已经在房间！", 402));
         return;
       }
-      msg = user.name + "加入本房间！";
+      msg = curUser.name + "加入本房间！";
       code = 202;
     }
     io.in(name).emit(
       "sys",
       new SysMsg(msg, code, {
-        room: allRoom[name],
-        user: user
+        room: curRoom,
+        user: curUser
       })
     );
 
     if (code === 202) {
+      io.to(socket.id).emit("init", { json: curRoom.initJSON, user: curUser });
       io.to(socket.id).emit("sys", new SysMsg("同步中..."));
-      allRoom[name].history.forEach(emitData => {
+      curRoom.history.forEach(emitData => {
         io.to(socket.id).emit(emitData.type, emitData);
       });
       io.to(socket.id).emit("sys", new SysMsg("同步成功...", 203));
     }
+
+    socket.on("disconnect", function() {
+      curRoom.removeUser(curUser);
+    });
   });
   socket.on("leave", ({ name, user }) => {
-    if (allRoom[name]) {
-      allRoom[name].removeUser(user);
+    if (curRoom) {
+      curRoom.removeUser(user);
       socket.leave(name);
-      io.in(name).emit("sys", new SysMsg(`${user.name}已退出房间"`));
-      io.to(socket.id).emit("sys", new SysMsg("已退出房间", 204));
+      io.in(name).emit(
+        "sys",
+        new SysMsg(`${user.name}已退出房间"`, 204, { room: curRoom })
+      );
+      io.to(socket.id).emit("sys", new SysMsg("已退出房间", 205));
     } else {
       io.to(socket.id).emit("sys", new SysMsg("房间不存在", 502));
     }
   });
-  socket.on("action", ({ room, type, data, user }) => {
+  socket.on("action", ({ room, type, data }) => {
+    const user = curUser;
     if (!room) return;
-    if (allRoom[room.name] && allRoom[room.name].password === room.password) {
+    if (curRoom && curRoom.password === room.password) {
       let emitData = {};
       if (type === "draw") {
         const { layerName, pathName, action, json } = data;
@@ -189,10 +209,11 @@ io.on("connection", socket => {
             user
           }
         };
+        curRoom.clear();
       }
       if (emitData.type) {
         io.in(room.name).emit(emitData.type, emitData);
-        allRoom[room.name].addHistory(emitData);
+        curRoom.addHistory(emitData);
       }
     }
   });
