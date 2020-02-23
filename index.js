@@ -103,13 +103,13 @@ class SysMsg {
 io.on("connection", socket => {
   let curUser = {};
   let curRoom = null;
-  socket.on("join", ({ name, password, user, data }) => {
+  socket.on("join", ({ name, password, user, data = {} }) => {
     let isCreate = false,
       error;
     if (!allRoom[name]) {
       isCreate = true;
       allRoom[name] = new RoomInfo(name, password);
-      allRoom[name].initJSON = data.json;
+      allRoom[name].initJSON = data.json || [];
       [curUser, error] = allRoom[name].addUser(user);
       if (error) {
         io.to(socket.id).emit("sys", new SysMsg("加入房间失败！", 500));
