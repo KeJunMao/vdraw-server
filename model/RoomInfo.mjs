@@ -17,15 +17,12 @@ export default class RoomInfo {
     } else {
       userId = nextUserId++;
     }
-
-    user = Object.assign(
-      user || {
-        name: "user" + userId
-      },
-      {
-        id: userId
-      }
-    );
+    if (!user.id) {
+      user.id = userId;
+    }
+    if (!user.name) {
+      user.name = "user" + userId;
+    }
     const found = this.users.find(u => user.id === u.id);
     if (found) {
       this.del();
