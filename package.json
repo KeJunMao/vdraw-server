@@ -4,7 +4,7 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "start": "node index.js"
+    "start": "node --experimental-modules index.js"
   },
   "type": "module",
   "dependencies": {
