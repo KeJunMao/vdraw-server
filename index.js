@@ -1,104 +1,18 @@
-const app = require("express")();
-const http = require("http").Server(app);
-const io = require("socket.io")(http);
+import express from "express";
+import { Server } from "http";
+import socketIo from "socket.io";
+import RoomInfo from "./model/RoomInfo.mjs";
+import SysMsg from "./model/SysMsg.mjs";
+import allRoom from "./data/rooms.mjs";
+
+const app = express();
+const http = Server(app);
+const io = socketIo(http);
 const PORT = process.env.PORT || 3000;
 
 app.get("/", function(req, res) {
-  res.send("Ok");
+  res.send("Vdraw Socket.io Api!");
 });
-
-let allRoom = {};
-let nextUserId = 1;
-
-class RoomInfo {
-  constructor(name, password) {
-    this.name = name;
-    this.password = password;
-    this.time = 59;
-    this.users = [];
-    this.history = [];
-    this.initJSON = [];
-    this.init();
-  }
-  addUser(user) {
-    let userId;
-    if (user && user.id) {
-      userId = user.id;
-    } else {
-      userId = nextUserId++;
-    }
-
-    user = Object.assign(
-      user || {
-        name: "user" + userId
-      },
-      {
-        id: userId
-      }
-    );
-    const found = this.users.find(u => user.id === u.id);
-    if (found) {
-      this.del();
-      return [found, true];
-    }
-    this.users.push(user);
-    return [user, false];
-  }
-  removeUser(user) {
-    this.users = this.users.filter(v => {
-      return v.id !== user.id;
-    });
-    this.del();
-  }
-  addHistory(emitData) {
-    this.history.push(emitData);
-  }
-  init() {
-    // todo 自动删除房间
-    // const timmer = setInterval(
-    //   function() {
-    //     this.time--;
-    //     if (this.time <= 0) {
-    //       clearInterval(timmer);
-    //       delete allRoom[this.name];
-    //     }
-    //   }.bind(this),
-    //   100
-    // );
-  }
-  del() {
-    // 无用户时释放房间
-    if (this.users.length === 0) {
-      delete allRoom[this.name];
-    }
-  }
-  clear() {
-    this.history = [];
-  }
-}
-class SysMsg {
-  constructor(msg, code, data) {
-    this.msg = msg;
-    this.code = code || 200;
-    // info
-    // 200 通用成功
-    // 201 创建房间成功
-    // 202 加入房间成功
-    // 203 同步成功
-    // 204 用户离开成功
-    // 205 我离开成功
-    // 206 更新房间
-    //
-    // error
-    // 400 通用客户端错误
-    // 401 密码错误
-    // 402 重复加入
-    // 500 服务器通用错误
-    // 501 同步失败
-    // 502 要退出的房间不存在
-    this.data = data || null;
-  }
-}
 
 io.on("connection", socket => {
   let curUser = {};
